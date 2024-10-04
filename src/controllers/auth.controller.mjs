@@ -2,7 +2,9 @@ import bcryptjs from "bcryptjs";
 import { User } from "../models/user.model.mjs";
 import { generateVerificationToken } from "../utils/generateVerificationToken.mjs";
 import { generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.mjs";
+import { sendVerificationEmail, sendWelcomeEmail } from "../email/emails.mjs";
 
+// signup user
 export const signup = async (req, res) => {
   const { email, password, name } = req.body;
 
@@ -33,6 +35,9 @@ export const signup = async (req, res) => {
     // jwt validation
     generateTokenAndSetCookie(res, user._id);
 
+    // send verification email
+    await sendVerificationEmail(user.email, verificationToken);
+
     //sending response
     res.status(201).json({
       success: true,
@@ -46,9 +51,48 @@ export const signup = async (req, res) => {
     res.status(404).json({ success: false, message: error.message });
   }
 };
+
+// verify user
+export const verifyEmail = async (req, res) => {
+  const { code } = req.body;
+  try {
+    const user = await User.findOne({
+      verificationToken: code,
+      verificationTokenExpiresAt: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid or expired verification code",
+        });
+    }
+
+    user.isVerified = true;
+
+    await user.save();
+
+    await sendWelcomeEmail(user.email, user.name);
+
+    res.sendStatus(200).json({
+      success: true,
+      message:"Email verified successfully",
+      user: {
+        ...user._doc,
+        password: undefined,
+      }
+    })
+  } catch (error) {}
+};
+
+// login user
 export const login = async (req, res) => {
   res.send("login routes");
 };
+
+// user forget password
 export const logout = async (req, res) => {
   res.send("logout routes");
 };
