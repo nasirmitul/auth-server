@@ -62,12 +62,10 @@ export const verifyEmail = async (req, res) => {
     });
 
     if (!user) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid or expired verification code",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification code",
+      });
     }
 
     user.isVerified = true;
@@ -78,21 +76,60 @@ export const verifyEmail = async (req, res) => {
 
     res.sendStatus(200).json({
       success: true,
-      message:"Email verified successfully",
+      message: "Email verified successfully",
       user: {
         ...user._doc,
         password: undefined,
-      }
-    })
-  } catch (error) {}
+      },
+    });
+  } catch (error) {
+    console.log("Error in verify email", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
 };
 
 // login user
 export const login = async (req, res) => {
-  res.send("login routes");
+  const { email, password } = req.body;
+
+  try {
+    // checking user if exist
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // checking if the password is valid or not
+    const isPasswordValid = await bcryptjs.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res
+        .status(400)
+        .json({ success: false, message: "passwords do not match" });
+    }
+
+    // allowing access
+    generateTokenAndSetCookie(res, user._id);
+    user.lastLogin = new Date();
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Logged in successfully ",
+      user: {
+        ...user._doc,
+        password: undefined,
+      },
+    });
+  } catch (error) {
+    console.log("Error in login function", error);
+    res.status(400).json({ success: false, message: error.message });
+  }
 };
 
 // user forget password
 export const logout = async (req, res) => {
-  res.send("logout routes");
+  res.clearCookie("token");
+  res.status(200).json({ success: true, message: "Logged out successfully" });
 };
